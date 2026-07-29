@@ -1,129 +1,70 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
 
 from questions import questions
+model = joblib.load("cognitive_model.pkl")
+feature_names = joblib.load("feature_names.pkl")
 
-# ML model
-
-model = joblib.load(
-    "cognitive_model.pkl"
-)
-
-
-feature_names = joblib.load(
-    "feature_names.pkl"
-)
-
-st.set_page_config(
-    page_title="CogniScore AI",
-    page_icon="🧠",
-    layout="centered"
-)
-
-
-st.title("🧠 CogniScore AI")
-
-st.write(
-"""
-AI-based cognitive ability assessment.
-Answer the following reasoning questions
-to estimate your cognitive level.
-"""
-)
-
-name = st.text_input(
-    "Enter your name"
-)
-
-
-age = st.number_input(
-    "Enter your age",
-    min_value=10,
-    max_value=100
-)
-answers = []
-
-
-for i,q in enumerate(questions):
-
-    st.subheader(
-        f"Question {i+1}"
-    )
-
-    choice = st.radio(
-        q["question"],
-        q["options"],
-        key=i
-    )
-
-    answers.append(
-        choice
-    )
-
-
-def process_answers(answers):
+def create_features(user_answers):
 
     result = {}
 
-    correct = 0
+    category_scores = {
+        "Numerical":0,
+        "Logical":0,
+        "Pattern":0,
+        "Verbal":0,
+        "Analytical":0,
+        "Reflection":0
+    }
+
+    total_correct = 0
+    weighted_score = 0
+
+    for i, q in enumerate(questions):
+
+        correct = int(user_answers[i] == q["answer"])
+
+        result[f"Q{i+1}"] = correct
+
+        if correct:
+            total_correct += 1
+            weighted_score += q["weight"]
+            category_scores[q["category"]] += 1
+
+    result["total_correct"] = total_correct
+
+    result["Numerical_score"] = category_scores["Numerical"]/3
+    result["Logical_score"] = category_scores["Logical"]/3
+    result["Pattern_score"] = category_scores["Pattern"]/3
+    result["Verbal_score"] = category_scores["Verbal"]/2
+    result["Analytical_score"] = category_scores["Analytical"]/2
+    result["Reflection_score"] = category_scores["Reflection"]/2
+
+    result["weighted_score"] = weighted_score
 
 
-    for i,ans in enumerate(answers):
+feature_dict = create_features(user_answers)
 
-        if ans == questions[i]["answer"]:
-            result[f"Q{i+1}"] = 1
-            correct += 1
+input_df = pd.DataFrame([feature_dict])
 
-        else:
-            result[f"Q{i+1}"] = 0
+input_df = input_df[feature_names]
+
+prediction = model.predict(input_df)[0]
+
+input_df = input_df[feature_names]
 
 
-    result["total_correct"] = correct
+levels = {
+    0:"Developing",
+    1:"Average",
+    2:"Above Average",
+    3:"Advanced",
+    4:"Exceptional"
+}
+
+st.success(f"Predicted Level: {levels[prediction]}")
 
 
     return result
-
-
-if st.button("Predict Cognitive Level"):
-
-
-    data = process_answers(
-        answers
-    )
-
-
-    input_df = pd.DataFrame(
-        [data]
-    )
-
-
-    prediction = model.predict(
-        input_df
-    )
-
-
-    level = prediction[0]
-
-
-    levels = {
-        0:"Developing",
-        1:"Average",
-        2:"Above Average",
-        3:"Advanced",
-        4:"Exceptional"
-    }
-
-
-    st.success(
-        f"""
-        {name}, your cognitive level is:
-
-        ## {levels[level]}
-        """
-    )
-
-
-
-
