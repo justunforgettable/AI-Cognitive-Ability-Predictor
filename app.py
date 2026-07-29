@@ -1,22 +1,102 @@
+import joblib
+
+feature_names = joblib.load("feature_names.pkl")
+
+print(feature_names)
+print(len(feature_names))
+
 import streamlit as st
 import pandas as pd
 import joblib
 
 from questions import questions
-model = joblib.load("cognitive_model.pkl")
-feature_names = joblib.load("feature_names.pkl")
 
+# -------------------------------
+# Page Configuration
+# -------------------------------
+st.set_page_config(
+    page_title="CogniScore AI",
+    page_icon="🧠",
+    layout="centered"
+)
+
+# -------------------------------
+# Load Model
+# -------------------------------
+try:
+    model = joblib.load("cognitive_model.pkl")
+    feature_names = joblib.load("feature_names.pkl")
+except Exception as e:
+    st.error(f"Error loading model: {e}")
+    st.stop()
+
+# -------------------------------
+# Title
+# -------------------------------
+st.title("🧠 CogniScore AI")
+
+st.markdown("""
+### AI Cognitive Ability Assessment
+
+Answer all 15 questions carefully.
+
+**Note:** This project is for educational purposes only and is **not** an official IQ test.
+""")
+
+# -------------------------------
+# User Details
+# -------------------------------
+name = st.text_input("Enter Your Name")
+
+age = st.number_input(
+    "Enter Your Age",
+    min_value=15,
+    max_value=80,
+    value=20
+)
+
+st.divider()
+
+# -------------------------------
+# Collect Answers
+# -------------------------------
+answers = []
+
+for i, q in enumerate(questions):
+
+    st.subheader(f"Question {i+1}")
+
+    choice = st.radio(
+        q["question"],
+        q["options"],
+        key=f"Q{i+1}"
+    )
+
+    answers.append(choice)
+
+# -------------------------------
+# Feature Engineering
+# -------------------------------
 def create_features(user_answers):
 
     result = {}
 
     category_scores = {
-        "Numerical":0,
-        "Logical":0,
-        "Pattern":0,
-        "Verbal":0,
-        "Analytical":0,
-        "Reflection":0
+        "Numerical": 0,
+        "Logical": 0,
+        "Pattern": 0,
+        "Verbal": 0,
+        "Analytical": 0,
+        "Reflection": 0
+    }
+
+    category_totals = {
+        "Numerical": 3,
+        "Logical": 3,
+        "Pattern": 3,
+        "Verbal": 2,
+        "Analytical": 2,
+        "Reflection": 2
     }
 
     total_correct = 0
@@ -35,36 +115,113 @@ def create_features(user_answers):
 
     result["total_correct"] = total_correct
 
-    result["Numerical_score"] = category_scores["Numerical"]/3
-    result["Logical_score"] = category_scores["Logical"]/3
-    result["Pattern_score"] = category_scores["Pattern"]/3
-    result["Verbal_score"] = category_scores["Verbal"]/2
-    result["Analytical_score"] = category_scores["Analytical"]/2
-    result["Reflection_score"] = category_scores["Reflection"]/2
+    for category in category_scores:
+        result[f"{category}_score"] = (
+            category_scores[category] /
+            category_totals[category]
+        )
 
     result["weighted_score"] = weighted_score
 
+    return result
 
-feature_dict = create_features(user_answers)
+# -------------------------------
+# Prediction
+# -------------------------------
+if st.button("Predict Cognitive Level"):
 
-input_df = pd.DataFrame([feature_dict])
+    feature_dict = create_features(answers)
 
-input_df = input_df[feature_names]
+    input_df = pd.DataFrame([feature_dict])
 
-prediction = model.predict(input_df)[0]
+    try:
 
-input_df = input_df[feature_names]
+        input_df = input_df[feature_names]
 
+        prediction = model.predict(input_df)[0]
 
-levels = {
-    0:"Developing",
-    1:"Average",
-    2:"Above Average",
-    3:"Advanced",
-    4:"Exceptional"
-}
+    except Exception as e:
 
-st.success(f"Predicted Level: {levels[prediction]}")
+        st.error("Prediction Error")
+        st.exception(e)
+        st.write("Input Columns:")
+        st.write(input_df.columns.tolist())
+        st.write("Expected Columns:")
+        st.write(feature_names)
+        st.stop()
 
+    levels = {
+        0: "Developing",
+        1: "Average",
+        2: "Above Average",
+        3: "Advanced",
+        4: "Exceptional"
+    }
 
-return result
+    st.success(f"### {name}, your Cognitive Level is: **{levels[prediction]}**")
+
+    st.divider()
+
+    st.subheader("Assessment Report")
+
+    correct = feature_dict["total_correct"]
+
+    percentage = round(correct / len(questions) * 100, 1)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric("Correct Answers", f"{correct}/{len(questions)}")
+
+    with col2:
+        st.metric("Score", f"{percentage}%")
+
+    st.subheader("Category Performance")
+
+    categories = [
+        "Numerical",
+        "Logical",
+        "Pattern",
+        "Verbal",
+        "Analytical",
+        "Reflection"
+    ]
+
+    for category in categories:
+
+        score = feature_dict[f"{category}_score"]
+
+        st.write(category)
+        st.progress(float(score))
+
+    st.subheader("Recommendation")
+
+    if prediction == 4:
+
+        st.success(
+            "Outstanding performance. Continue solving advanced reasoning and analytical problems."
+        )
+
+    elif prediction == 3:
+
+        st.info(
+            "Very good reasoning skills. Practice higher-level logical puzzles to improve further."
+        )
+
+    elif prediction == 2:
+
+        st.warning(
+            "Good foundation. Focus on numerical reasoning and pattern recognition to improve."
+        )
+
+    elif prediction == 1:
+
+        st.warning(
+            "Average cognitive performance. Daily reasoning practice can improve your score."
+        )
+
+    else:
+
+        st.error(
+            "Develop your reasoning skills through puzzles, mathematics, reading, and memory exercises."
+        )
