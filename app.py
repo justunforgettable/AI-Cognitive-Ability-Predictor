@@ -67,4 +67,4 @@ levels = {
 st.success(f"Predicted Level: {levels[prediction]}")
 
 
-    return result
+return result
